@@ -6,12 +6,14 @@ import { MemoryStore } from '../src/store/store.js'
 import { resolveConfig } from '../src/config.js'
 import {
   memoryAdd,
+  memoryCompact,
   memoryList,
   memoryOverview,
   memoryRebuild,
   memoryRm,
   memorySearch,
   memoryShow,
+  memoryStats,
   memoryToggle,
 } from '../src/commands.js'
 
@@ -23,6 +25,9 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'dsh-mem-cmd-'))
   cwd = join(root, 'repo')
   mkdirSync(cwd, { recursive: true })
+  // Pin the project root: without a .git here, findProjectRoot walks up and
+  // escapes the tmp sandbox whenever an ancestor (e.g. /tmp/.git) is a repo.
+  mkdirSync(join(cwd, '.git'), { recursive: true })
   process.env.DSH_HOME = join(root, 'dsh-home')
   store = new MemoryStore(resolveConfig({}))
   store.detachDomain()
@@ -46,9 +51,9 @@ describe('/memory command handlers', () => {
     expect(memoryAdd(store, cwd, [])).toContain('缺少记忆内容')
   })
 
-  it('add reports tag conflicts', () => {
+  it('add reports conflicts', () => {
     memoryAdd(store, cwd, ['测试命令是', 'pnpm', 'vitest', '--tags', 'test'])
-    const out = memoryAdd(store, cwd, ['测试前先', 'build', '--tags', 'test'])
+    const out = memoryAdd(store, cwd, ['测试命令是', 'pnpm', 'test', '--tags', 'test'])
     expect(out).toContain('可能冲突')
   })
 
@@ -65,7 +70,7 @@ describe('/memory command handlers', () => {
 
   it('search finds by keyword', () => {
     memoryAdd(store, cwd, ['部署用', 'docker', 'compose'])
-    const out = memorySearch(store, cwd, 'docker')
+    const out = memorySearch(store, cwd, ['docker'])
     expect(out).toContain('docker compose')
     expect(out).toContain('score=')
   })
@@ -86,6 +91,23 @@ describe('/memory command handlers', () => {
   it('rebuild reports rewritten indexes', () => {
     memoryAdd(store, cwd, ['x'])
     expect(memoryRebuild(store, cwd)).toContain('MEMORY.md')
+  })
+
+  it('stats reports counts and freshness buckets', () => {
+    memoryAdd(store, cwd, ['项目条', '--type', 'procedure'])
+    memoryAdd(store, cwd, ['全局条', '--scope', 'global'])
+    const out = memoryStats(store, cwd)
+    expect(out).toContain('active 2 条')
+    expect(out).toContain('procedure=1')
+    expect(out).toContain('<7d=2')
+  })
+
+  it('compact reports near-duplicates and stays quiet on a healthy library', () => {
+    expect(memoryCompact(store, cwd)).toContain('记忆库健康')
+    memoryAdd(store, cwd, ['构建命令是', 'pnpm', 'build', '--tags', 'build'])
+    memoryAdd(store, cwd, ['构建命令是', 'pnpm', 'build', '工具', '--tags', 'build'])
+    const out = memoryCompact(store, cwd)
+    expect(out).toContain('近重复对')
   })
 
   it('list --all includes everything, filters by scope keyword', () => {

@@ -29,10 +29,11 @@ export function renderRecall(ranked: readonly ScoredMemory[], maxTokens: number)
   for (const scored of ranked) {
     const memory = scored.memory
     const date = memory.lastConfirmed.slice(0, 10)
+    const stale = scored.stale === true ? ' · ⚠引用路径已失效，请先核实' : ''
     const body = memory.body.length > INLINE_BODY_MAX
       ? `${memory.body.slice(0, INLINE_BODY_MAX)}…（余下 ${memory.body.length - INLINE_BODY_MAX} 字符，用 memory_get ${memory.id} 取全文）`
       : memory.body
-    const entry = `\n[${memory.scope}/${memory.type} · ${memory.source} · ${date} · id=${memory.id}]\n${body}\n`
+    const entry = `\n[${memory.scope}/${memory.type} · ${memory.source} · ${date}${stale} · id=${memory.id}]\n${body}\n`
     if (used + entry.length > budget && injected.length > 0) {
       folded += 1
       continue

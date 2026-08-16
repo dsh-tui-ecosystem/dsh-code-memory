@@ -12,10 +12,11 @@ import type {} from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ResolvedConfig } from '../config.js'
 import type { MemoryStore } from '../store/store.js'
+import type { RecallTracker } from '../recall/tracker.js'
 import { renderRecall } from '../recall/render.js'
 import { emitRecalled, freshUserText } from './shared.js'
 
-export function registerPreStepRecall(ctx: Context, store: MemoryStore, config: ResolvedConfig): void {
+export function registerPreStepRecall(ctx: Context, store: MemoryStore, config: ResolvedConfig, tracker?: RecallTracker): void {
   if (!config.recall.onPreStep) return
   ctx.on('agent/pre-step', async ({ agent, messages }, next) => {
     const query = freshUserText(messages)
@@ -35,9 +36,11 @@ export function registerPreStepRecall(ctx: Context, store: MemoryStore, config: 
       content: [{ type: 'text', text: rendered.text }],
       source: { kind: 'plugin', plugin: 'dsh-code-memory', form: 'recall' },
     })
+    const ids = rendered.injected.map((scored) => scored.memory.id)
+    tracker?.record(agent.session, ids, 'pre-step')
     emitRecalled(agent.session, {
       via: 'pre-step',
-      ids: rendered.injected.map((scored) => scored.memory.id),
+      ids,
       query: query.slice(0, 200),
       budgetTokens: config.recall.maxTokens,
       folded: rendered.folded,

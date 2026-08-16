@@ -12,6 +12,7 @@ import type { Memory, MemoryFrontmatter, MemoryScope, MemorySource, MemoryType }
 import { keywordRelevance, tokenize } from '../recall/keyword.js'
 import { rankMemories } from '../recall/scorer.js'
 import type { ScoredMemory } from '../recall/scorer.js'
+import { pathsStale } from '../recall/staleness.js'
 import { deleteMemoryFile, memoryFilePath, scanMemories, writeMemoryFile } from './files.js'
 import { writeIndex } from './index-file.js'
 import { scopeDir } from './paths.js'
@@ -20,6 +21,37 @@ import type { MemoryGlobal } from '../domain.js'
 
 type MemoryDomain = Domain<typeof memoryDomainSpec>
 
+/** Repo-relative path lookalikes in prose: contain `/`, end in an extension, no URL scheme. */
+const CONTENT_PATH_RE = /[\w.-]+(?:\/[\w.-]+)+\.[a-zA-Z0-9]{1,5}/gu
+
+/** Version-string segment: v20.11.0, 3.11, 1.0.0-rc.1. */
+const VERSION_SEGMENT_RE = /^v?\d+(?:\.\d+)+(?:-[\w.]+)?$/u
+
+/** Domain-like leading segment: github.com, gitlab.io, … (URL without scheme). */
+const DOMAIN_SEGMENT_RE = /^[\w-]+\.(?:com|org|net|io|dev|app|cn|edu|gov|ai|sh)$/u
+
+/**
+ * Extract file-path anchors from memory content (explicit `paths` input wins).
+ * False positives rejected by context and shape: URLs (scheme before the
+ * match, or a domain-like leading segment) and version strings
+ * (node/v20.11.0) — both would anchor to paths that never exist and wrongly
+ * mark the memory stale.
+ */
+export function extractContentPaths(content: string): string[] {
+  const paths: string[] = []
+  for (const match of content.matchAll(CONTENT_PATH_RE)) {
+    const candidate = match[0]
+    const before = content.slice(Math.max(0, (match.index ?? 0) - 3), match.index)
+    if (before.endsWith('://') || before.endsWith('//')) continue // URL with scheme
+    if (candidate.includes('..')) continue
+    const segments = candidate.split('/')
+    if (DOMAIN_SEGMENT_RE.test(segments[0] ?? '')) continue // schemaless URL
+    if (segments.some((segment) => VERSION_SEGMENT_RE.test(segment))) continue
+    paths.push(candidate.replace(/^\/+|\/+$/gu, ''))
+  }
+  return [...new Set(paths)].slice(0, 10)
+}
+
 export interface AddInput {
   readonly content: string
   readonly type: MemoryType
@@ -27,6 +59,9 @@ export interface AddInput {
   readonly source: MemorySource
   readonly tags?: readonly string[]
   readonly importance?: number
+  /** Code anchors; when omitted, repo-relative paths are extracted from content. */
+  readonly paths?: readonly string[]
+  readonly symbols?: readonly string[]
 }
 
 export interface AddResult {
@@ -40,6 +75,8 @@ export interface AddResult {
 export interface ListFilter {
   readonly scope?: MemoryScope
   readonly type?: MemoryType
+  /** Keep only memories carrying at least one of these tags. */
+  readonly tags?: readonly string[]
   /** Include superseded memories (default: active only). */
   readonly all?: boolean
 }
@@ -112,6 +149,8 @@ export class MemoryStore {
       lastConfirmed: now,
       status: 'active',
       tags: input.tags ?? [],
+      paths: input.paths ?? extractContentPaths(body),
+      symbols: input.symbols ?? [],
     })
     const file = writeMemoryFile(dir, frontmatter, body, memoryFilePath(input.type, id))
     const memory: Memory = { ...frontmatter, body, file }
@@ -119,10 +158,15 @@ export class MemoryStore {
     const { memories } = scanMemories(dir)
     const bodyTokens = tokenize(body)
     const inputTags = new Set((input.tags ?? []).map((tag) => tag.toLowerCase()))
+    // Write-time conflict candidates: strong topical overlap alone, or a
+    // curated-tag overlap with at least weak topical overlap (tag equality
+    // by itself is too coarse — same-tag memories are often unrelated).
     const conflicts = memories.filter((candidate) => {
       if (candidate.id === id || candidate.status !== 'active') return false
-      if (candidate.tags.some((tag) => inputTags.has(tag.toLowerCase()))) return true
-      return keywordRelevance(bodyTokens, candidate) >= 0.5
+      const relevance = keywordRelevance(bodyTokens, candidate)
+      if (relevance >= 0.5) return true
+      const tagOverlap = candidate.tags.some((tag) => inputTags.has(tag.toLowerCase()))
+      return tagOverlap && relevance >= 0.25
     })
 
     this.refreshIndex(input.scope, cwd, memories)
@@ -140,9 +184,12 @@ export class MemoryStore {
       warnings.push(...scanned.warnings.map((warning) => `[${scope}] ${warning}`))
       memories.push(...scanned.memories)
     }
+    const wantedTags = filter.tags?.map((tag) => tag.toLowerCase())
     const filtered = memories.filter((memory) =>
       (filter.all === true || memory.status === 'active')
-      && (filter.type === undefined || memory.type === filter.type))
+      && (filter.type === undefined || memory.type === filter.type)
+      && (wantedTags === undefined || wantedTags.length === 0
+        || memory.tags.some((tag) => wantedTags.includes(tag.toLowerCase()))))
     filtered.sort((a, b) =>
       (Number(a.status === 'superseded') - Number(b.status === 'superseded'))
       || (b.importance - a.importance)
@@ -186,10 +233,38 @@ export class MemoryStore {
     return updated
   }
 
+  /**
+   * Confirm a memory as still true: bump `lastConfirmed` to now, refreshing
+   * its recency score. Same-day touches are no-ops to avoid index churn.
+   * Called when the model explicitly pulls the full text (memory_get).
+   */
+  touch(id: string, cwd: string): Memory | undefined {
+    const memory = this.get(id, cwd)
+    if (memory === undefined || memory.status !== 'active') return undefined
+    const now = new Date().toISOString()
+    if (memory.lastConfirmed.slice(0, 10) === now.slice(0, 10)) return memory
+    const updated: Memory = { ...memory, lastConfirmed: now }
+    const { body, file, ...rest } = updated
+    writeMemoryFile(this.dirFor(memory.scope, cwd), { ...rest }, body, file)
+    this.refreshIndex(memory.scope, cwd)
+    void this.mirrorPut(updated, cwd)
+    return updated
+  }
+
   /** Keyword search across enabled scopes; relevance-ranked, active only. */
   search(queryText: string, cwd: string, filter: ListFilter = {}, nowMs = Date.now()): ScoredMemory[] {
     const { memories } = this.list(cwd, { ...filter, all: false })
-    return rankMemories(memories, tokenize(queryText), nowMs)
+    const ranked = rankMemories(memories, tokenize(queryText), nowMs)
+    // Staleness penalty: a memory whose anchored paths all vanished keeps its
+    // relevance but drops half its score, and carries the stale flag so the
+    // renderer can label it. Never hidden — stale context still beats none.
+    let anyStale = false
+    const adjusted = ranked.map((scored) => {
+      if (!pathsStale(scored.memory, cwd)) return scored
+      anyStale = true
+      return { ...scored, score: scored.score * 0.5, stale: true as const }
+    })
+    return anyStale ? adjusted.sort((a, b) => b.score - a.score) : adjusted
   }
 
   /** Rewrite MEMORY.md for every enabled scope and resync the mirror from disk. */

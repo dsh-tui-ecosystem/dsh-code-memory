@@ -36,6 +36,14 @@ export const memoryFrontmatterSchema = z.object({
   status: z.enum(['active', 'superseded']),
   supersededBy: z.string().regex(MEMORY_ID_RE).optional(),
   tags: z.array(z.string()).default([]),
+  /**
+   * Code anchors: repo-relative file paths this memory depends on. Recall
+   * weights anchor hits like tag hits; when every anchored path disappears
+   * from disk the memory is treated as stale (penalized, never deleted).
+   */
+  paths: z.array(z.string()).default([]),
+  /** Code anchors: symbol names (functions, classes, config keys). */
+  symbols: z.array(z.string()).default([]),
 })
 export type MemoryFrontmatter = z.infer<typeof memoryFrontmatterSchema>
 

@@ -23,6 +23,7 @@ import { createRequire } from 'node:module'
 const MEMORY_EVENT_TYPES = [
   'memory/captured',
   'memory/recalled',
+  'memory/recall-used',
   'memory/superseded',
 ] as const
 

@@ -28,6 +28,7 @@ import { registerMemoryEventTypes } from './registration.js'
 import { memoryDomainSpec } from './domain.js'
 import { resolveConfig } from './config.js'
 import { MemoryStore } from './store/store.js'
+import { RecallTracker } from './recall/tracker.js'
 import { registerMemoryCommands } from './commands.js'
 import { registerSessionStartRecall } from './hooks/session-start.js'
 import { registerPreStepRecall } from './hooks/pre-step.js'
@@ -59,6 +60,10 @@ export function apply(ctx: Context, config: Config = {}): void {
   if (!resolved.enabled) return
 
   const store = new MemoryStore(resolved)
+  // Recall→use feedback: which memories were injected into which session,
+  // so memory_get follow-ups can be attributed to a recall channel.
+  const tracker = new RecallTracker()
+  tracker.attach(ctx)
 
   // Storage domain: runtime toggles + derived mirror. Memory is an
   // enhancement, so a failed open degrades to file-only instead of crashing
@@ -87,7 +92,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   })
 
   ctx.inject(['tools'], (ictx) => {
-    registerMemoryTools(ictx, store, resolved)
+    registerMemoryTools(ictx, store, resolved, tracker)
   })
 
   // Tool discipline rides the stable system-prompt sections (order 150, the
@@ -101,9 +106,9 @@ export function apply(ctx: Context, config: Config = {}): void {
     })
   })
 
-  registerSessionStartRecall(ctx, store, resolved)
-  registerPreStepRecall(ctx, store, resolved)
-  registerCapture(ctx, store, resolved)
+  registerSessionStartRecall(ctx, store, resolved, tracker)
+  registerPreStepRecall(ctx, store, resolved, tracker)
+  registerCapture(ctx, store, resolved, tracker)
   registerCompactionRescue(ctx, store, resolved)
 
   if (resolved.smokeEvent) {

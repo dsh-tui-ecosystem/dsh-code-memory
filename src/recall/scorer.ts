@@ -19,6 +19,8 @@ export interface ScoredMemory {
   readonly recency: number
   readonly importance: number
   readonly score: number
+  /** True when every anchored path vanished from disk (score pre-penalized). */
+  readonly stale?: boolean
 }
 
 /** Score one memory against pre-tokenized query terms. */

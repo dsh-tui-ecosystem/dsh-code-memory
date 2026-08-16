@@ -23,7 +23,7 @@ export interface MemoryCapturedEvent {
 /** Durable payload of one `memory/recalled` event (memories were injected). */
 export interface MemoryRecalledEvent {
   /** Injection channel that fired. */
-  readonly via: 'session-start' | 'pre-step'
+  readonly via: 'session-start' | 'pre-step' | 'on-error'
   /** Recalled memory ids, in injected order. */
   readonly ids: readonly string[]
   /** The query text that drove pre-step recall, when any. */
@@ -32,6 +32,14 @@ export interface MemoryRecalledEvent {
   readonly budgetTokens: number
   /** How many scored candidates were folded away by the budget. */
   readonly folded: number
+}
+
+/** Durable payload of one `memory/recall-used` event (a recalled memory was followed up). */
+export interface MemoryRecallUsedEvent {
+  /** The memory the model pulled in full after seeing it recalled. */
+  readonly id: string
+  /** Channel that recalled it within this session. */
+  readonly via: 'session-start' | 'pre-step' | 'on-error'
 }
 
 /** Durable payload of one `memory/superseded` event (conflict resolution). */
@@ -55,6 +63,12 @@ declare module '@deepseek-ai/dsh-session/types' {
      * @param data - Channel, ids, and budget bookkeeping.
      */
     'memory/recalled': MemoryRecalledEvent
+    /**
+     * Log-only record that a recalled memory was actually followed up with
+     * memory_get — the recall-quality feedback signal.
+     * @param data - The used memory id and the channel that surfaced it.
+     */
+    'memory/recall-used': MemoryRecallUsedEvent
     /**
      * Log-only record that a memory was superseded by a newer one.
      * @param data - Old and new memory ids.

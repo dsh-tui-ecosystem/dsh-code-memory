@@ -14,14 +14,15 @@ import type {} from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ResolvedConfig } from '../config.js'
 import type { MemoryStore } from '../store/store.js'
+import type { RecallTracker } from '../recall/tracker.js'
 import { emitRecalled } from './shared.js'
 
 const MEMORY_ID_LIST_RE = /mem_[0-9A-HJKMNP-TV-Z]{26}/gu
 
-export function registerSessionStartRecall(ctx: Context, store: MemoryStore, config: ResolvedConfig): void {
+export function registerSessionStartRecall(ctx: Context, store: MemoryStore, config: ResolvedConfig, tracker?: RecallTracker): void {
   if (!config.recall.onSessionStart) return
   ctx.on('agent/session-start', ({ agent, source }) => {
-    void injectIndex(agent, source, store, config).catch(() => {
+    void injectIndex(agent, source, store, config, tracker).catch(() => {
       // Recall is best-effort; a disk hiccup must not break session startup.
     })
   })
@@ -32,6 +33,7 @@ async function injectIndex(
   source: string,
   store: MemoryStore,
   config: ResolvedConfig,
+  tracker?: RecallTracker,
 ): Promise<void> {
   const toggles = await store.toggles()
   if (!toggles.recallEnabled) return
@@ -63,9 +65,11 @@ async function injectIndex(
     content: [{ type: 'text', text }],
     source: { kind: 'plugin', plugin: 'dsh-code-memory', form: 'recall' },
   }))
+  const ids = text.match(MEMORY_ID_LIST_RE) ?? []
+  tracker?.record(agent.session, ids, 'session-start')
   emitRecalled(agent.session, {
     via: 'session-start',
-    ids: text.match(MEMORY_ID_LIST_RE) ?? [],
+    ids,
     budgetTokens: config.recall.maxTokens,
     folded: 0,
   })

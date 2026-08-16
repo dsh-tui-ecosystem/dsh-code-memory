@@ -15,6 +15,8 @@ function mem(overrides: Partial<Memory> & { id: string }): Memory {
     lastConfirmed: '2026-08-10T00:00:00.000Z',
     status: 'active',
     tags: [],
+    paths: [],
+    symbols: [],
     body: '',
     file: 'facts/x.md',
     ...overrides,
@@ -26,6 +28,13 @@ describe('tokenize', () => {
     expect(tokenize('use pnpm install')).toEqual(['use', 'pnpm', 'install'])
     expect(tokenize('构建命令')).toEqual(['构建', '建命', '命令'])
     expect(tokenize('短')).toEqual(['短'])
+  })
+
+  it('splits code identifiers on separators and camelCase boundaries', () => {
+    expect(tokenize('loginHandler')).toEqual(['loginhandler', 'login', 'handler'])
+    expect(tokenize('foo_bar-baz')).toEqual(['foo_bar-baz', 'foo', 'bar', 'baz'])
+    expect(tokenize('HTMLParser')).toEqual(['htmlparser', 'html', 'parser'])
+    expect(tokenize('src/store/store.ts')).toEqual(['src/store/store.ts', 'src', 'store', 'ts'])
   })
 })
 
@@ -55,5 +64,25 @@ describe('scorer', () => {
     const taggedScore = scoreMemory(tokenize('pnpm'), tagged, NOW)
     const bodiedScore = scoreMemory(tokenize('pnpm'), bodied, NOW)
     expect(taggedScore.relevance).toBeGreaterThan(bodiedScore.relevance)
+  })
+
+  it('weights code anchors (paths/symbols) like tags', () => {
+    const anchored = mem({ id: 'mem_anchor', body: '无关正文', paths: ['src/store/store.ts'] })
+    const bodied = mem({ id: 'mem_body2', body: '顺手提过 store.ts 一次' })
+    const anchoredScore = scoreMemory(tokenize('store.ts'), anchored, NOW)
+    const bodiedScore = scoreMemory(tokenize('store.ts'), bodied, NOW)
+    expect(anchoredScore.relevance).toBeGreaterThan(bodiedScore.relevance)
+  })
+
+  it('matches Chinese queries against split identifier sub-words', () => {
+    const anchored = mem({ id: 'mem_sym', body: '登录入口', symbols: ['loginHandler'] })
+    const scored = scoreMemory(tokenize('handler 登录'), anchored, NOW)
+    expect(scored.relevance).toBeGreaterThan(0)
+  })
+
+  it('splits camelCase path segments into anchor sub-words', () => {
+    const anchored = mem({ id: 'mem_camel', body: '无关正文', paths: ['src/loginHandler.ts'] })
+    const scored = scoreMemory(tokenize('handler'), anchored, NOW)
+    expect(scored.relevance).toBeGreaterThan(0)
   })
 })
