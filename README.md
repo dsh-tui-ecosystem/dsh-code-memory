@@ -19,10 +19,7 @@ dsh（deepseek-harness）的跨会话记忆插件，兼容 [dsh-TUI](https://git
 按 dsh 官方插件安装方式（`dsh plugin` 是对 pnpm 的薄转发，装完自动 reconcile 进 profile 的 bundles 层栈）：
 
 ```sh
-# 先装 dsh-TUI（https://github.com/ccch1mneyyy/dsh-TUI）
-dsh plugin --profile dsh-tui add @deepseek-harness-tui/dsh-tui
-
-# 再装本插件到同一 profile（从 npm registry）
+# 安装到 dsh-tui profile（从 npm registry）
 dsh plugin --profile dsh-tui add dsh-code-memory
 
 # 启动 / 重启生效
