@@ -1,0 +1,16 @@
+# dsh-code-memory bundle patch: mount the plugin into the profile composition
+# tree.
+#
+# `dsh plugin --profile <name> add link:../dsh-code-memory` pnpm-installs this
+# package into the profile, and the CLI's reconcile step appends it to the
+# profile's dsh.profile.bundles because package.json declares
+# `dsh.bundle.patch`. At boot, app-boot applies every bundle's patch list in
+# bundle order; this insert row is what mounts the plugin.
+#
+# All row config stays at schema defaults. To tune a value, override this
+# row's config by id in the profile's own cordis.patch.yml user layer (config
+# replacement is wholesale per id — restate every key) — do NOT insert a
+# second same-id row.
+- insert:
+    - id: code-memory
+      name: 'dsh-code-memory'
