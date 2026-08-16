@@ -3,6 +3,7 @@
   "description": "Cross-session memory plugin for DeepSeek Harness (dsh): file-first markdown memories, recall injection, agent memory tools",
   "version": "0.0.1",
   "type": "module",
+  "packageManager": "pnpm@11.21.0",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "exports": {
@@ -28,7 +29,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "pnpm build && pnpm test"
   },
   "license": "BSD-3-Clause",
   "repository": {

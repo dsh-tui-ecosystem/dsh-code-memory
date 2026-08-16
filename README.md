@@ -65,7 +65,17 @@ smokeEvent: false   # 仅开发：每会话写一条 dummy memory/captured 验�
 ```bash
 pnpm install
 pnpm build     # tsc → lib/
-pnpm test      # vitest，56 例
+pnpm test      # vitest，66 例
 ```
 
 红线：新增自定义 session 事件类型时，必须同步加进 `src/registration.ts` 的 `MEMORY_EVENT_TYPES` 和 `src/events.ts` 的 `SessionEventMap` 合并，否则含该事件的会话无法 resume。
+
+## 发版
+
+CI：`ci.yml` 在 main 的 push/PR 上跑 Node 22/24 的 build+test；`release.yml` 在 `v*` tag 上校验版本号一致后发布 npm（provenance）并建 GitHub Release。需要仓库 secret `NPM_TOKEN`（granular token，只允许本包 publish 即可）。
+
+```bash
+# 发版 = 提版本号 + 打 tag + 推 tag
+pnpm version patch   # 或 minor / major；生成版本提交与 v* tag
+git push origin main --follow-tags
+```
