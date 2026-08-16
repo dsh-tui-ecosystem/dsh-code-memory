@@ -31,6 +31,12 @@
     "test": "vitest run"
   },
   "license": "BSD-3-Clause",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dsh-tui-ecosystem/dsh-code-memory.git"
+  },
+  "homepage": "https://github.com/dsh-tui-ecosystem/dsh-code-memory#readme",
+  "bugs": "https://github.com/dsh-tui-ecosystem/dsh-code-memory/issues",
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"

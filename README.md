@@ -42,7 +42,7 @@ dsh plugin --profile dsh-tui remove dsh-code-memory
 ### 本地开发
 
 ```sh
-git clone https://github.com/CikeSeven/dsh-code-memory
+git clone https://github.com/dsh-tui-ecosystem/dsh-code-memory
 cd dsh-code-memory
 pnpm install && pnpm build
 dsh plugin --profile dsh-tui add link:.   # link 进 profile，改代码重 build 即生效
