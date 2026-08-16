@@ -36,17 +36,6 @@ dsh plugin --profile dsh-tui remove dsh-code-memory
 
 配置覆写：在 `~/.dsh/profiles/dsh-tui/cordis.patch.yml` 用户层按 id `code-memory` 覆写（config 为整块替换，须复述全部键，见下节）。
 
-### 本地开发
-
-```sh
-git clone https://github.com/dsh-tui-ecosystem/dsh-code-memory
-cd dsh-code-memory
-pnpm install && pnpm build
-dsh plugin --profile dsh-tui add link:.   # link 进 profile，改代码重 build 即生效
-dsh --profile dsh-tui                     # 真实 TTY 手动验证
-DSH_TUI_DEBUG=1 dsh --profile dsh-tui     # 需要调试时
-```
-
 ## 配置（全部有默认值）
 
 ```yaml
@@ -57,10 +46,6 @@ capture: { salienceGated: true, compactionRescue: true }
 projectDir: '.dsh/memory'
 smokeEvent: false   # 仅开发：每会话写一条 dummy memory/captured 验证 resume
 ```
-
-## dsh-TUI 兼容说明
-
-dsh-TUI 的 `Chat.tsx` 本地命令 switch 里有一个 `/memory` 占位 case（显示"DSH 暂无持久记忆服务"），会先于插件命令命中。需要把该 case 改为：**`channel.commandList` 里存在 external 的 `memory` 命令时，走 default 分支的 `channel.runExternalCommand` 派发，否则保持占位提示**——与本插件注册的全局 `memory` 命令即完成对接，TUI 补全已由插件经 `tuiCommandTrees` 提供。
 
 ## 可观测性
 
