@@ -16,12 +16,36 @@ dsh（deepseek-harness）的跨会话记忆插件。Markdown 文件是唯一事�
 
 ## 安装
 
-```bash
-# 本地开发
-dsh plugin --profile dsh-tui add link:../dsh-code-memory
+按 dsh 官方插件安装方式（`dsh plugin` 是对 pnpm 的薄转发，装完自动 reconcile 进 profile 的 bundles 层栈）：
+
+```sh
+# 安装到 dsh-tui profile（从 npm registry）
+dsh plugin --profile dsh-tui add dsh-code-memory
+
+# 启动 / 重启生效
+dsh --profile dsh-tui        # 或 dsh-tui
 ```
 
-包内 `cordis.patch.yml` 自动把插件挂进 profile 层栈。配置覆写在 `~/.dsh/profiles/<name>/cordis.patch.yml` 用户层按 id `code-memory` 整块替换（须复述全部键）。
+包内 `cordis.patch.yml` 声明了 `dsh.bundle.patch`，安装后无需手改任何配置即完成挂载。
+
+```sh
+# 升级 / 卸载（卸载即恢复原状，不留核心补丁）
+dsh plugin --profile dsh-tui update dsh-code-memory
+dsh plugin --profile dsh-tui remove dsh-code-memory
+```
+
+配置覆写：在 `~/.dsh/profiles/dsh-tui/cordis.patch.yml` 用户层按 id `code-memory` 覆写（config 为整块替换，须复述全部键，见下节）。
+
+### 本地开发
+
+```sh
+git clone https://github.com/CikeSeven/dsh-code-memory
+cd dsh-code-memory
+pnpm install && pnpm build
+dsh plugin --profile dsh-tui add link:.   # link 进 profile，改代码重 build 即生效
+dsh --profile dsh-tui                     # 真实 TTY 手动验证
+DSH_TUI_DEBUG=1 dsh --profile dsh-tui     # 需要调试时
+```
 
 ## 配置（全部有默认值）
 
